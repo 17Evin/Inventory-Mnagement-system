@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Inventory - Web UI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f4f4f4; }
+    input { padding: 6px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+    .controls { margin-top:10px; }
+  </style>
+</head>
+<body>
+  <h1>Inventory — Web UI</h1>
+  <div>
+    <div class="row">
+      <div class="col"><input id="name" placeholder="Name"/></div>
+      <div class="col"><input id="description" placeholder="Description"/></div>
+      <div style="width:120px;"><input id="quantity" placeholder="Qty"/></div>
+      <div style="width:120px;"><input id="price" placeholder="Price"/></div>
+      <div style="width:120px;"><button id="addBtn">Add</button></div>
+    </div>
+    <div class="controls">
+      <input id="baseUrl" placeholder="Backend base URL (e.g. https://myrepl.co)" value="http://localhost:8080"/>
+      <button id="refresh">Refresh</button>
+    </div>
+    <table id="tbl">
+      <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Qty</th><th>Price</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+<script>
+async function api(path, method='GET', body=null, base=null){
+  const b = base || document.getElementById('baseUrl').value || 'http://localhost:8080';
+  const res = await fetch(b + path, {
+    method,
+    headers: body ? {'Content-Type':'application/json'} : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if(res.status===204) return null;
+  if(!res.ok) {
+    const txt = await res.text();
+    throw new Error('HTTP '+res.status+': '+txt);
+  }
+  return res.json();
+}
+
+async function refresh(){
+  try {
+    const list = await api('/api/products','GET');
+    const tbody = document.querySelector('#tbl tbody');
+    tbody.innerHTML='';
+    list.forEach(p=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.id||''}</td><td>${p.name||''}</td><td>${p.description||''}</td><td>${p.quantity||''}</td><td>${p.price||''}</td>
+        <td>
+          <button data-id="${p.id}" class="edit">Edit</button>
+          <button data-id="${p.id}" class="del">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e){ alert('Error: '+e.message); }
+}
+
+document.getElementById('refresh').addEventListener('click', refresh);
+
+document.getElementById('addBtn').addEventListener('click', async ()=>{
+  const p = {
+    name: document.getElementById('name').value,
+    description: document.getElementById('description').value,
+    quantity: parseInt(document.getElementById('quantity').value||'0'),
+    price: parseFloat(document.getElementById('price').value||'0')
+  };
+  try {
+    await api('/api/products','POST',p);
+    refresh();
+  } catch(e){ alert('Error: '+e.message); }
+});
+
+document.querySelector('#tbl').addEventListener('click', async (ev)=>{
+  if(ev.target.classList.contains('del')){
+    const id = ev.target.dataset.id;
+    if(confirm('Delete product '+id+'?')){
+      try { await api('/api/products/'+id,'DELETE'); refresh(); } catch(e){ alert('Error: '+e.message); }
+    }
+  } else if(ev.target.classList.contains('edit')){
+    const id = ev.target.dataset.id;
+    const row = ev.target.closest('tr');
+    const name = row.children[1].textContent;
+    const desc = row.children[2].textContent;
+    const qty = row.children[3].textContent;
+    const price = row.children[4].textContent;
+    const n = prompt('Name', name);
+    if(n===null) return;
+    const newP = { name: n, description: prompt('Description', desc) || '', quantity: parseInt(prompt('Qty', qty) || '0'), price: parseFloat(prompt('Price', price) || '0') };
+    try { await api('/api/products/'+id,'PUT',newP); refresh(); } catch(e){ alert('Error: '+e.message); }
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>
